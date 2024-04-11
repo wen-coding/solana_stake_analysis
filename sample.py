@@ -16,8 +16,8 @@ def analyze_stakes(stakes, original_sum):
     total = 0
     high_stakes = 0
     low_stakes = 0
-    high_stake_limit = original_sum * 0.01
-    low_stake_limit = original_sum * 0.0001
+    high_stake_limit = original_sum * 0.003
+    low_stake_limit = original_sum * 0.00002
     for stake in stakes:
         total += stake
         if stake > high_stake_limit:
@@ -81,7 +81,8 @@ def perform_simulation(stakes, non_conforming_indices, samples, rotation, rounds
         for (j, value) in enumerate(stakes_stats):
             mins[j] = min(mins.get(j, value), value)
             maxs[j] = max(maxs.get(j, value), value)
-        non_conforming_ratio = sum(stakes[i] for i in non_conforming_indices)/stakes_stats[0]
+        non_conforming_ratio = sum(stakes[i] for i in serving if i in non_conforming_indices)
+        non_conforming_ratio = non_conforming_ratio/stakes_stats[0]
         mins['non_conforming'] = min(
             mins.get('non_conforming', non_conforming_ratio), non_conforming_ratio)
         maxs['non_conforming'] = max(
@@ -119,21 +120,21 @@ def main(args):
         original_stakes, sum(original_stakes) * args.non_conforming / 100)
     _, original_highstake, original_lowstake = analyze_stakes(
         original_stakes, sum_original_stakes)
-    print(f"total stake {sum_original_stakes} high_stakes (>1%) {original_highstake} "
-        f"low_stakes (<0.01%) {original_lowstake}")
+    print(f"total stake {sum_original_stakes} high_stakes (>0.3%) {original_highstake} "
+        f"low_stakes (<0.002%) {original_lowstake}")
     print(f"random sampling {args.samples} out of {len(original_stakes)}, "
         f"{args.rounds} rounds rotating {args.rotation}% stakes every round")
     range_mins, range_maxs, non_conformings = perform_simulation(
         original_stakes, non_conforming, args.samples, args.rotation, args.rounds)
     print(f"total {range_mins[0]*100/sum_original_stakes:2.2f}% to "
-        f"{range_maxs[0]*100/sum_original_stakes:2.2f}% high_stakes(>1%) "
-        f"{range_mins[1]} to {range_maxs[1]} low_stakes(<0.01%%) "
+        f"{range_maxs[0]*100/sum_original_stakes:2.2f}% high_stakes(>0.3%) "
+        f"{range_mins[1]} to {range_maxs[1]} low_stakes(<0.002%%) "
         f"{range_mins[2]} to {range_maxs[2]}")
     print(f"non_conforming {range_mins['non_conforming']*100:2.2f}% to "
         f"{range_maxs['non_conforming']*100:2.2f}%")
-    print(f"non_conforming (1/3 ~ 1/2) {non_conformings[0]*100/args.rounds:2.2f}% "
-        f"(1/2 ~ 2/3) {non_conformings[1]*100/args.rounds:2.2f}% "
-        f"(> 2/3) {non_conformings[2]*100/args.rounds:2.2f}%")
+    print(f"non_conforming (1/3 ~ 1/2) {non_conformings[0]}"
+        f"(1/2 ~ 2/3) {non_conformings[1]}"
+        f"(> 2/3) {non_conformings[2]}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Perform simulation on Solana stakes.')
