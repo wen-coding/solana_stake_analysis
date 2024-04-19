@@ -26,22 +26,36 @@ def analyze_stakes(stakes, original_sum):
             low_stakes += 1
     return total, high_stakes, low_stakes
 
-def select_non_conforming_stakes(stakes, target_stake_sum):
-    '''Selects non-conforming stakes, the sum should close to target_stake_sum (within 10%).'''
+def select_stakes(stakes, target_stake_sum, candidates=None):
+    '''Selects stakes, the sum should no greater but as close as possible to target_stake_sum.'''
     current_sum = 0
+    big_candidates = 0
     result = set()
-    for i in range(10000*len(stakes)):
-        index = np.random.randint(0, len(stakes))
-        if index in result:
-            continue
+    if candidates is not None:
+        select_from = list(candidates)
+        select_from.sort()
+        while select_from and stakes[select_from[-1]] > target_stake_sum:
+            big_candidates += 1
+            print("big_candidates", big_candidates)
+            select_from.pop()
+    else:
+        select_from = list(range(len(stakes)))
+    smallest_stake = stakes[select_from[0]]
+    for _ in range(len(stakes)):
+        while select_from and stakes[select_from[-1]] > target_stake_sum - current_sum:
+            select_from.pop()
+        if not select_from:
+            break
+        index = np.random.choice(select_from)
         stake = stakes[index]
-        if current_sum + stake > target_stake_sum * 1.0001:
-            continue
         current_sum += stake
         result.add(index)
-        if current_sum >= target_stake_sum:
+        select_from.remove(index)
+        if stake == smallest_stake and select_from:
+            smallest_stake = stakes[select_from[0]]
+        if current_sum >= target_stake_sum or current_sum + smallest_stake > target_stake_sum:
             break
-    return result
+    return result, current_sum, big_candidates
 
 def perform_simulation(stakes, non_conforming_indices, samples, rotation, rounds):
     '''Performs simulation on stakes.'''
@@ -55,9 +69,11 @@ def perform_simulation(stakes, non_conforming_indices, samples, rotation, rounds
     for i in range(count_stakes):
         states[i] = 0
     choices = []
-    serving = []
-    rotate_number = samples * rotation // 100
-    for _ in range(rounds):
+    serving = set()
+    rotate_number = 0
+    for round_index in range(rounds):
+        if round_index % 1000 == 0:
+            print(f"round {round_index}")
         select_count = samples if len(choices) == 0 else rotate_number
         available = []
         available_prob = []
@@ -75,7 +91,7 @@ def perform_simulation(stakes, non_conforming_indices, samples, rotation, rounds
             p=np.array(available_prob)/total_available_prob)
         for i in choice_indices:
             states[i] = 1
-            serving.append(i)
+            serving.add(i)
             choices.append(stakes[i])
         stakes_stats = analyze_stakes(choices, sum_stakes)
         for (j, value) in enumerate(stakes_stats):
@@ -93,7 +109,14 @@ def perform_simulation(stakes, non_conforming_indices, samples, rotation, rounds
             non_conforming_counts[1] += 1
         elif non_conforming_ratio > 1/3:
             non_conforming_counts[0] += 1
-        remove_indices = np.random.choice(serving, size=rotate_number, replace=False)
+        stakes_to_rotate = stakes_stats[0] * rotation / 100
+        remove_indices, removed_stakes, big_candidates = select_stakes(
+            stakes, stakes_to_rotate, serving)
+        mins['big_candidates'] = min(mins.get('big_candidates', big_candidates), big_candidates)
+        maxs['big_candidates'] = max(maxs.get('big_candidates', big_candidates), big_candidates)
+        if removed_stakes > stakes_to_rotate * 1.01:
+            print("Error: removed_stakes", removed_stakes, "stakes_to_rotate", stakes_to_rotate)
+        rotate_number = len(remove_indices)
         for i in remove_indices:
             states[i] = 2
             serving.remove(i)
@@ -108,7 +131,9 @@ def interpolate_stakes(stakes, interpolate):
     x = np.linspace(0, count_stakes-1, num=count_stakes)
     xnew = np.linspace(0, count_stakes-1, num=interpolate-count_stakes)
     interpolated = np.interp(xnew, x, stakes)
-    return stakes + interpolated.tolist()
+    result = stakes + interpolated.tolist()
+    result.sort()
+    return result
 
 def main(args):
     '''Main function.'''
@@ -116,7 +141,7 @@ def main(args):
     original_stakes = read_stakes("./validators_stakes_epoch_600")
     original_stakes = interpolate_stakes(original_stakes, args.interpolate)
     sum_original_stakes = sum(original_stakes)
-    non_conforming = select_non_conforming_stakes(
+    non_conforming, _, _ = select_stakes(
         original_stakes, sum(original_stakes) * args.non_conforming / 100)
     _, original_highstake, original_lowstake = analyze_stakes(
         original_stakes, sum_original_stakes)
@@ -135,6 +160,7 @@ def main(args):
     print(f"non_conforming (1/3 ~ 1/2) {non_conformings[0]}"
         f"(1/2 ~ 2/3) {non_conformings[1]}"
         f"(> 2/3) {non_conformings[2]}")
+    print(f"big_candidates {range_mins['big_candidates']} to {range_maxs['big_candidates']}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Perform simulation on Solana stakes.')
