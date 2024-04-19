@@ -34,15 +34,13 @@ def select_stakes(stakes, target_stake_sum, candidates=None):
     if candidates is not None:
         select_from = list(candidates)
         select_from.sort()
-        while select_from and stakes[select_from[-1]] > target_stake_sum:
-            big_candidates += 1
-            print("big_candidates", big_candidates)
-            select_from.pop()
     else:
         select_from = list(range(len(stakes)))
     smallest_stake = stakes[select_from[0]]
     for _ in range(len(stakes)):
         while select_from and stakes[select_from[-1]] > target_stake_sum - current_sum:
+            if current_sum == 0:
+                big_candidates += 1
             select_from.pop()
         if not select_from:
             break
