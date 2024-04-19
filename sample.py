@@ -29,7 +29,6 @@ def analyze_stakes(stakes, original_sum):
 def select_stakes(stakes, target_stake_sum, candidates=None):
     '''Selects stakes, the sum should no greater but as close as possible to target_stake_sum.'''
     current_sum = 0
-    big_candidates = 0
     result = set()
     if candidates is not None:
         select_from = list(candidates)
@@ -37,10 +36,9 @@ def select_stakes(stakes, target_stake_sum, candidates=None):
     else:
         select_from = list(range(len(stakes)))
     smallest_stake = stakes[select_from[0]]
+    biggest_candidate = stakes[select_from[-1]]
     for _ in range(len(stakes)):
         while select_from and stakes[select_from[-1]] > target_stake_sum - current_sum:
-            if current_sum == 0:
-                big_candidates += 1
             select_from.pop()
         if not select_from:
             break
@@ -53,7 +51,7 @@ def select_stakes(stakes, target_stake_sum, candidates=None):
             smallest_stake = stakes[select_from[0]]
         if current_sum >= target_stake_sum or current_sum + smallest_stake > target_stake_sum:
             break
-    return result, current_sum, big_candidates
+    return result, current_sum, biggest_candidate
 
 def perform_simulation(stakes, non_conforming_indices, samples, rotation, rounds):
     '''Performs simulation on stakes.'''
@@ -108,13 +106,18 @@ def perform_simulation(stakes, non_conforming_indices, samples, rotation, rounds
         elif non_conforming_ratio > 1/3:
             non_conforming_counts[0] += 1
         stakes_to_rotate = stakes_stats[0] * rotation / 100
-        remove_indices, removed_stakes, big_candidates = select_stakes(
+        remove_indices, removed_stakes, biggest_candidate = select_stakes(
             stakes, stakes_to_rotate, serving)
-        mins['big_candidates'] = min(mins.get('big_candidates', big_candidates), big_candidates)
-        maxs['big_candidates'] = max(maxs.get('big_candidates', big_candidates), big_candidates)
+        biggest_candidate = biggest_candidate/stakes_stats[0]
+        mins['biggest_candidate'] = min(
+            mins.get('biggest_candidate', biggest_candidate), biggest_candidate)
+        maxs['biggest_candidate'] = max(
+            maxs.get('biggest_candidate', biggest_candidate), biggest_candidate)
         if removed_stakes > stakes_to_rotate * 1.01:
             print("Error: removed_stakes", removed_stakes, "stakes_to_rotate", stakes_to_rotate)
         rotate_number = len(remove_indices)
+        mins['rotate_number'] = min(mins.get('rotate_number', rotate_number), rotate_number)
+        maxs['rotate_number'] = max(maxs.get('rotate_number', rotate_number), rotate_number)
         for i in remove_indices:
             states[i] = 2
             serving.remove(i)
@@ -158,7 +161,9 @@ def main(args):
     print(f"non_conforming (1/3 ~ 1/2) {non_conformings[0]}"
         f"(1/2 ~ 2/3) {non_conformings[1]}"
         f"(> 2/3) {non_conformings[2]}")
-    print(f"big_candidates {range_mins['big_candidates']} to {range_maxs['big_candidates']}")
+    print(f"biggest_candidate {range_mins['biggest_candidate']*100:2.2f}% to "
+          f"{range_maxs['biggest_candidate']*100:2.2f}% rotate_number "
+          f"{range_mins['rotate_number']} to {range_maxs['rotate_number']}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Perform simulation on Solana stakes.')
